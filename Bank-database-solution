@@ -1,0 +1,213 @@
+use bank;
+select * from account;
+select * from branch;
+select * from customer;
+select * from loan;
+select * from trandetails;
+
+select custid,fname,dob from customer
+order by year(dob),fname ;
+
+select custid,concat_ws(" ",fname,ifnull(mname,ltname)) as Cust_Name from customer;
+
+select a.acnumber,c.custid,c.fname,c.ltname,a.aod
+from customer c
+join account a
+on c.custid=a.custid;
+
+select bcity,count(bcity) as Cust_count from branch
+where bcity="Delhi";
+
+select c.custid,c.fname,a.acnumber,a.aod
+from customer c
+join account a
+on c.custid=a.custid
+where day(a.aod)>15;
+
+select fname,city,acnumber
+from account a
+join customer c
+on a.custid=c.custid
+join branch b
+on a.bid=b.bid
+where c.occupation not in("service","student");
+
+select bcity,count(bcity) as count_branch from branch
+group by bcity;
+
+select acnumber,fname,ltname 
+from customer c
+join account a 
+on c.custid=a.custid
+where a.astatus="Active";
+
+select c.custid,c.fname,l.bid,l.loan_amount
+from customer c
+join loan l 
+on c.custid=l.custid;
+
+select c.custid,concat_ws(" ",c.fname,c.mname,c.ltname) as customer_name,a.acnumber
+from customer c 
+join account a
+on c.custid=a.custid 
+where a.astatus="Terminated";
+
+select t.transaction_type,count(t.transaction_type) as trans_count 
+from trandetails t
+join account a 
+on t.acnumber=a.acnumber
+where a.custid="C00001"
+group by transaction_type;
+
+select c.custid,c.fname,c.city,b.bcity
+from customer c
+join account a 
+on c.custid=a.custid
+join branch b
+on b.bid=a.bid
+where c.city<>b.bcity; 
+
+select c.custid,c.fname,c.ltname
+from customer c
+join(  select custid,count(bid) as bid_count from loan 
+       group by custid
+       having count(bid)>1)x
+on c.custid=x.custid ; 
+
+select count(custid) as n_count 
+from loan  
+where custid not in
+             ( select custid from account); 
+             
+
+
+select t.acnumber,sum(t.transaction_amount)+a.opening_balance as deposit_amount 
+from trandetails t
+join account a 
+on t.acnumber=a.acnumber 
+where t.transaction_type="deposit"
+group by t.acnumber;
+
+select count(custid) as count_customer 
+from customer 
+where custid not in (select custid from account);
+
+select b.bcity,ifnull(count(a.acnumber),0) as branch_wise_account_count
+from branch b
+left join account a 
+on b.bid=a.bid
+group by b.bcity;
+
+select c.fname 
+from customer c 
+join(   select custid,count(acnumber) as a_count 
+        from account a
+        group by custid)x
+on c.custid=x.custid
+where x.a_count>1;
+
+select c.custid,fname from customer c
+join( 
+select custid,count(distinct acnumber) as a_count, count(distinct bid) as b_count from account
+group by custid
+order by custid asc,a_count desc,b_count desc) x
+on c.custid=x.custid
+where x.a_count and x.b_count>1;
+
+
+
+
+/* only those who done transaction*/
+select c.custid,concat_ws(" ",c.fname,c.mname,c.ltname)  as customer_name,a.acnumber,x.tran_count  
+from customer c
+join account a
+on c.custid=a.custid
+join (select acnumber,count(transaction_type) as tran_count from trandetails
+      group by acnumber)x
+on a.acnumber=x.acnumber;
+
+/* all customer details*/
+select c.custid,concat_ws(" ",c.fname,c.mname,c.ltname)  as customer_name,a.acnumber,x.tran_count  
+from customer c
+left join account a
+on c.custid=a.custid
+left join (select acnumber,count(transaction_type) as tran_count from trandetails
+      group by acnumber)x
+on a.acnumber=x.acnumber;
+
+
+select acnumber from(
+select acnumber,count(transaction_type) as tran_count
+from trandetails
+group by acnumber
+order by tran_count desc)x
+limit 0,1;
+
+
+select b.bname,b.bcity
+from branch b 
+join(select distinct bid,count(custid) as c_count from account
+     group by bid
+     order by c_count desc
+     limit 0,1)x
+on b.bid=x.bid;
+
+
+
+/* balance amount*/
+select a.total_deposit-b.total_withdrawal as balance_amount from
+(select x.acnumber, sum(x.t_amount+y.o_amount) as total_deposit from 
+(select acnumber,sum(transaction_amount) as t_amount from trandetails where acnumber="A00001" and transaction_type="deposit") x
+join (select acnumber, opening_balance as o_amount from account where acnumber="A00001")y 
+on x.acnumber=y.acnumber) a
+join(
+ select acnumber,sum(transaction_amount) as total_withdrawal from trandetails 
+ where acnumber="A00001" and transaction_type="withdrawal") b
+ on a.acnumber=b.acnumber; 
+
+
+
+
+/*long method*/
+select a.acnumber,a.t_sum as deposit,b.t_sum as withdrawal from(
+select acnumber,transaction_type as deposit,t_sum
+from(
+select acnumber,transaction_type,sum(transaction_amount) as t_sum
+from trandetails
+group by acnumber,transaction_type
+order by acnumber)x
+where x.transaction_type="deposit")a
+join(
+select acnumber,transaction_type as withdrawal,t_sum
+from(
+select acnumber,transaction_type,sum(transaction_amount) as t_sum
+from trandetails
+group by acnumber,transaction_type
+order by acnumber)y
+where y.transaction_type="withdrawal")b
+on a.acnumber=b.acnumber
+where a.t_sum<b.t_sum;
+
+/* short method*/
+select x.acnumber,x.d_amount as deposit,y.w_amount as withdrawal from
+(
+select acnumber,transaction_type as deposit,sum(transaction_amount) as d_amount
+from trandetails
+where transaction_type="deposit"
+group by acnumber)x
+join
+(select acnumber,transaction_type as withdrawal,sum(transaction_amount) as w_amount
+from trandetails
+where transaction_type="withdrawal"
+group by acnumber)y
+on x.acnumber=y.acnumber
+where x.d_amount<y.w_amount;
+
+select c.custid,c.fname,c.ltname from customer c
+join(
+select custid,count(distinct bid) as b_count,sum(loan_amount) as total_loan_amount
+from loan
+group by custid
+order by b_count desc, total_loan_amount desc 
+limit 0,1) x
+on c.custid=x.custid;
